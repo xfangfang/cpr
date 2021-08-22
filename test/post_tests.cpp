@@ -8,6 +8,7 @@
 #include <cpr/cpr.h>
 #include <cpr/multipart.h>
 
+#include "cpr/ssl_options.h"
 #include "httpServer.hpp"
 
 using namespace cpr;
@@ -133,6 +134,31 @@ TEST(UrlEncodedPostTests, FormPostSingleTest) {
     EXPECT_EQ(ErrorCode::OK, response.error.code);
 }
 
+TEST(FileUpload, FormPostSingleTest) {
+    Url url{"http://httpbin.org/put"};
+    Response response = cpr::Put(url, Multipart{{"someFile", cpr::File{"/home/fabian/test.txt"}}});
+    std::cout << response.text;
+    EXPECT_EQ(url, response.url);
+    EXPECT_EQ(200, response.status_code);
+    EXPECT_EQ(ErrorCode::OK, response.error.code);
+}
+
+TEST(ProxyTest, SOCKS5) {
+    cpr::Session session;
+    session.SetProxies({{"http", "socks5h://98.185.94.94:4145"}, {"https", "socks5h://98.185.94.94:4145"}});
+    session.SetUrl("https://api.myip.com/");
+    cpr::SslOptions options;
+    options.SetOption(ssl::VerifyHost{false});
+    options.SetOption(ssl::VerifyPeer{false});
+    session.SetSslOptions(options);
+    cpr::Response response = session.Get();
+    EXPECT_EQ(200, response.status_code);
+    std::cout << "Message: " << response.error.message << std::endl;
+    std::cout << "StatusCode: " << response.status_code << std::endl;
+    std::cout << "ErrorCode: " << static_cast<int>(response.error.code) << std::endl;
+    EXPECT_EQ(ErrorCode::OK, response.error.code);
+}
+
 TEST(UrlEncodedPostTests, FormPostFileTest) {
     std::string filename{"test_file"};
     std::string content{"hello world"};
@@ -183,9 +209,7 @@ TEST(UrlEncodedPostTests, FormPostFileNoCopyTest) {
 TEST(UrlEncodedPostTests, TimeoutPostTest) {
     Url url{server->GetBaseUrl() + "/json_post.html"};
     std::string body{R"({"RegisterObject": {"DeviceID": "65010000005030000001"}})"};
-    cpr::Response response =
-            cpr::Post(url, cpr::Header{{"Content-Type", "application/json"}}, cpr::Body{body},
-                      cpr::ConnectTimeout{3000}, cpr::Timeout{3000});
+    cpr::Response response = cpr::Post(url, cpr::Header{{"Content-Type", "application/json"}}, cpr::Body{body}, cpr::ConnectTimeout{3000}, cpr::Timeout{3000});
     std::string expected_text{R"({"RegisterObject": {"DeviceID": "65010000005030000001"}})"};
     EXPECT_EQ(expected_text, response.text);
     EXPECT_EQ(url, response.url);
@@ -197,8 +221,7 @@ TEST(UrlEncodedPostTests, TimeoutPostTest) {
 TEST(UrlEncodedPostTests, FormPostFileBufferTest) {
     std::string content{"hello world"};
     Url url{server->GetBaseUrl() + "/form_post.html"};
-    Response response =
-            cpr::Post(url, Multipart{{"x", Buffer{content.begin(), content.end(), "test_file"}}});
+    Response response = cpr::Post(url, Multipart{{"x", Buffer{content.begin(), content.end(), "test_file"}}});
     std::string expected_text{
             "{\n"
             "  \"x\": " +
@@ -233,8 +256,7 @@ TEST(UrlEncodedPostTests, FormPostFileBufferNoCopyTest) {
 TEST(UrlEncodedPostTests, FormPostFileBufferPointerTest) {
     const char* content = "hello world";
     Url url{server->GetBaseUrl() + "/form_post.html"};
-    Response response =
-            cpr::Post(url, Multipart{{"x", Buffer{content, 11 + content, "test_file"}}});
+    Response response = cpr::Post(url, Multipart{{"x", Buffer{content, 11 + content, "test_file"}}});
     std::string expected_text{
             "{\n"
             "  \"x\": " +
@@ -252,8 +274,7 @@ TEST(UrlEncodedPostTests, FormPostFileBufferArrayTest) {
     const char content[] = "hello world";
     Url url{server->GetBaseUrl() + "/form_post.html"};
     // We subtract 1 from std::end() because we don't want to include the terminating null
-    Response response = cpr::Post(
-            url, Multipart{{"x", Buffer{std::begin(content), std::end(content) - 1, "test_file"}}});
+    Response response = cpr::Post(url, Multipart{{"x", Buffer{std::begin(content), std::end(content) - 1, "test_file"}}});
     std::string expected_text{
             "{\n"
             "  \"x\": " +
@@ -270,8 +291,7 @@ TEST(UrlEncodedPostTests, FormPostFileBufferArrayTest) {
 TEST(UrlEncodedPostTests, FormPostFileBufferVectorTest) {
     std::vector<unsigned char> content{'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd'};
     Url url{server->GetBaseUrl() + "/form_post.html"};
-    Response response =
-            cpr::Post(url, Multipart{{"x", Buffer{content.begin(), content.end(), "test_file"}}});
+    Response response = cpr::Post(url, Multipart{{"x", Buffer{content.begin(), content.end(), "test_file"}}});
     std::string expected_text{
             "{\n"
             "  \"x\": hello world\n"
@@ -286,8 +306,7 @@ TEST(UrlEncodedPostTests, FormPostFileBufferVectorTest) {
 TEST(UrlEncodedPostTests, FormPostFileBufferStdArrayTest) {
     std::array<unsigned char, 11> content{{'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd'}};
     Url url{server->GetBaseUrl() + "/form_post.html"};
-    Response response =
-            cpr::Post(url, Multipart{{"x", Buffer{content.begin(), content.end(), "test_file"}}});
+    Response response = cpr::Post(url, Multipart{{"x", Buffer{content.begin(), content.end(), "test_file"}}});
     std::string expected_text{
             "{\n"
             "  \"x\": hello world\n"
@@ -421,13 +440,7 @@ TEST(UrlEncodedPostTests, PostReflectTest) {
     std::string signature = "x-ms-date: something";
     std::string logType = "LoggingTest";
     std::string date = getTimestamp();
-    Response response = cpr::Post(cpr::Url(uri),
-                                  cpr::Header{{"content-type", contentType},
-                                              {"Authorization", signature},
-                                              {"log-type", logType},
-                                              {"x-ms-date", date},
-                                              {"content-length", std::to_string(body.length())}},
-                                  cpr::Body(body));
+    Response response = cpr::Post(cpr::Url(uri), cpr::Header{{"content-type", contentType}, {"Authorization", signature}, {"log-type", logType}, {"x-ms-date", date}, {"content-length", std::to_string(body.length())}}, cpr::Body(body));
     EXPECT_EQ(ErrorCode::OK, response.error.code);
     EXPECT_EQ(200, response.status_code);
     EXPECT_EQ(body, response.text);
