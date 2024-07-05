@@ -97,7 +97,7 @@ Session::Session() : curl_(new CurlHolder()) {
     curl_easy_setopt(curl_->handle, CURLOPT_NOSIGNAL, 1L);
 #endif
 
-#if LIBCURL_VERSION_NUM >= 0x071900
+#if LIBCURL_VERSION_NUM >= 0x071900 && !defined(__PS4__)
     curl_easy_setopt(curl_->handle, CURLOPT_TCP_KEEPALIVE, 1L);
 #endif
 }
@@ -876,6 +876,13 @@ Response Session::Complete(CURLcode curl_error) {
     hasBodyOrPayload_ = false;
 
     std::string errorMsg = curl_->error.data();
+    if (errorMsg.empty() && curl_error != CURLE_OK) {
+        printf("error code: %d\n", curl_error);
+        const char* err = curl_easy_strerror(curl_error);
+        if (err) {
+            errorMsg = std::string{err};
+        }
+    }
     return Response(curl_, std::move(response_string_), std::move(header_string_), std::move(cookies), Error(curl_error, std::move(errorMsg)));
 }
 
