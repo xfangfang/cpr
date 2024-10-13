@@ -138,7 +138,7 @@ Session::Session() : curl_(new CurlHolder()) {
     curl_easy_setopt(curl_->handle, CURLOPT_NOSIGNAL, 1L);
 #endif
 
-#if LIBCURL_VERSION_NUM >= 0x071900 // 7.25.0
+#if LIBCURL_VERSION_NUM >= 0x071900 && !defined(__PS4__)
     curl_easy_setopt(curl_->handle, CURLOPT_TCP_KEEPALIVE, 1L);
 #endif
     current_interceptor_ = interceptors_.end();
@@ -872,6 +872,12 @@ Response Session::Complete(CURLcode curl_error) {
     curl_slist_free_all(raw_cookies);
 
     std::string errorMsg = curl_->error.data();
+    if (errorMsg.empty() && curl_error != CURLE_OK) {
+        const char* err = curl_easy_strerror(curl_error);
+        if (err) {
+            errorMsg = std::string{err};
+        }
+    }
     return Response(curl_, std::move(response_string_), std::move(header_string_), std::move(cookies), Error(curl_error, std::move(errorMsg)));
 }
 
@@ -887,6 +893,12 @@ Response Session::CompleteDownload(CURLcode curl_error) {
     curl_slist_free_all(raw_cookies);
     std::string errorMsg = curl_->error.data();
 
+    if (errorMsg.empty() && curl_error != CURLE_OK) {
+        const char* err = curl_easy_strerror(curl_error);
+        if (err) {
+            errorMsg = std::string{err};
+        }
+    }
     return Response(curl_, "", std::move(header_string_), std::move(cookies), Error(curl_error, std::move(errorMsg)));
 }
 
