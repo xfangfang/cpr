@@ -13,7 +13,13 @@
 #include <thread>
 #include <utility>
 
+#ifdef PS5
+// The console's threads take their stacks from a pool that is much smaller
+// than the system has memory: a few threads are enough for the requests.
+#define CPR_DEFAULT_THREAD_POOL_MAX_THREAD_NUM 4
+#else
 #define CPR_DEFAULT_THREAD_POOL_MAX_THREAD_NUM std::thread::hardware_concurrency()
+#endif
 
 constexpr size_t CPR_DEFAULT_THREAD_POOL_MIN_THREAD_NUM = 1;
 constexpr std::chrono::milliseconds CPR_DEFAULT_THREAD_POOL_MAX_IDLE_TIME{60000};
